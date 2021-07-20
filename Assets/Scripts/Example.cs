@@ -101,6 +101,10 @@ public class Example : MonoBehaviour
         }
     }
 
+    private IEnumerator movePlayer(object path, float xScale, float yScale, float v)
+    {
+        throw new System.NotImplementedException();
+    }
 
     void setTransformPosition(Transform trans, Vector2Int pos, float xScale, float yScale)
     {
