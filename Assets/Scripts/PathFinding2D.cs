@@ -79,11 +79,6 @@ public static class PathFinding2D
         return findDest(next, openList, map, to, out finalNode, passableValues, getDistance, getNeighbors);
     }
 
-    internal static object find4(Vector2Int playerPos, Vector2Int goalPos, Dictionary<Vector2Int, int> map, List<int> passableValues)
-    {
-        throw new NotImplementedException();
-    }
-
     static void findTemp(List<Node> openList, Node currentNode, Vector2Int from, Vector2Int to, Func<Vector2Int, Vector2Int, float> getDistance)
     {
 

@@ -4,9 +4,13 @@ using UnityEngine;
 
 public class Monster : MonoBehaviour
 {
+    private void Awake()
+    {
+        
+    }
     Animator animator;
     void Start()
     {
-        //animator  get
+        GroundManager.Instance.AddBlockInfo(transform.position, BlockType.Monster);
     }
 }
