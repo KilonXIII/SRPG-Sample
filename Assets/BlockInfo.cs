@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
@@ -21,8 +21,11 @@ public class BlockInfo : MonoBehaviour
     public float clickDistance = 1;
     void OnMouseDown()
     {
+        //ClearMoveableArea();
         downMousePosition = Input.mousePosition;
     }
+
+
     void OnMouseUp()
     {
         var upMousePosition = Input.mousePosition;
@@ -30,11 +33,138 @@ public class BlockInfo : MonoBehaviour
         {
             return;
         }
-        Player.SelectPlayer.OnTouch(transform.position);
+
+        switch (StageManager.GameState)
+        {
+            case GameStateType.SelectPlayer:
+                SelectPlayer();
+                break;
+            case GameStateType.SelectBlockToMoveOrAttackTarget:
+                SelectBlockToMoveOrAttackTarget();
+                break;
+            case GameStateType.SelectToAttackTarget:
+                SelectToAttackTarget();
+                break;
+
+            case GameStateType.NotInit:
+            case GameStateType.IngPlayerMove:
+            case GameStateType.MonsterTurn:
+                Debug.Log($"블럭을 클릭할 수 없는 상태 입니다:" +
+                    $"{StageManager.GameState}");
+                break;
+        }
+
+        //// 이미 빨간 블럭 상태일때 다시 선택하면 빨간 블럭을 원상 복귀 시켜라.
+
+
+        //// 지금 블럭에 몬스터 있으면 때리자.
+
+
+        //if( actor && actor == Player.SelectedPlayer)
+        //{
+        //    // 영역 표시.
+        //    //actor.moveDistance
+        //    // 첫번째 이동으로 갈수 있는것을 첫번째 라인에 추가.
+        //    ShowMoveDistance(actor.moveDistance);
+        //}
+        //else
+        //    Player.SelectedPlayer.OnTouch(transform.position);
     }
 
-    string debugTextPrefab = "DebugTextPrefab";
+
+    private void SelectToAttackTarget()
+    {
+        if (Player.SelectedPlayer.enemyExistPoint.Contains(this))
+        {
+            if (Player.SelectedPlayer.CanAttackTarget(actor))
+            {
+                Player.SelectedPlayer.AttackToTarget(actor);
+            }
+        }
+    }
+
+    private void SelectBlockToMoveOrAttackTarget()
+    {
+        // 공격 대상이 있다면 공격 하자.(액터가 몬스터라면)
+        if (actor)
+        {
+            //현재 공격 하는 액터가 공격 대상으로 할 수 있는지 확인.
+            // todo:공격 범위 안에 있는지 확인해줘야함.
+            if (Player.SelectedPlayer.CanAttackTarget(actor))
+            {
+                Player.SelectedPlayer.AttackToTarget(actor);
+            }
+        }
+        else
+        {
+            if (highLightedMoveableArea.Contains(this))
+            {
+                Player.SelectedPlayer.ClearEnemyExistPoint();
+                Player.SelectedPlayer.MoveToPosition(transform.position);
+                ClearMoveableArea();
+                StageManager.GameState = GameStateType.IngPlayerMove;
+            }
+        }
+    }
+
+    private void SelectPlayer()
+    {
+        if (actor == null)
+            return;
+
+        if(actor.GetType() == typeof(Player))
+        {
+            //Player.SelectedPlayer = actor as Player;
+            Player.SelectedPlayer = (Player)actor;
+
+            if (Player.SelectedPlayer.CompleteTurn)
+                NotifyUI.Instance.Show("모든 행동이 끝난 캐릭터 입니다");
+
+            //이동 가능한 영역 표시.
+            if (Player.SelectedPlayer.completeMove == false)
+                ShowMoveDistance(Player.SelectedPlayer.moveDistance);
+
+            // 현재 위치에서 공격 가능한 영역 표시.
+            if (Player.SelectedPlayer.completeAct == false)
+            {
+                Player.SelectedPlayer.ShowAttackableArea();
+                StageManager.GameState = GameStateType.SelectBlockToMoveOrAttackTarget;
+            }
+        }
+    }
+
+    private void ShowMoveDistance(int moveDistance)
+    {
+        Quaternion rotate = Quaternion.Euler(0, 45, 0);
+        Vector3 halfExtents = (moveDistance / Mathf.Sqrt(2)) * 0.99f * Vector3.one;
+
+        var blocks = Physics.OverlapBox(transform.position
+            , halfExtents, rotate);
+
+        foreach (var item in blocks)
+        {
+            if (Player.SelectedPlayer.OnMoveable(item.transform.position, moveDistance))
+            {
+                var block = item.GetComponent<BlockInfo>();
+                if (block)
+                {
+                    block.ToChangeBlueColor();
+                    highLightedMoveableArea.Add(block);
+                }
+            }
+        }
+    }
+    static readonly List<BlockInfo> highLightedMoveableArea = new List<BlockInfo>();
+    private void ClearMoveableArea()
+    {
+        highLightedMoveableArea.ForEach(x => x.ToChangeOriginalColor());
+        highLightedMoveableArea.Clear();
+    }
+
+    readonly string debugTextPrefab = "DebugTextPrefab";
     GameObject debugTextGos;
+    internal Actor actor;
+
     internal void UpdateDebugInfo()
     {
         if (debugTextGos == null)
@@ -43,6 +173,9 @@ public class BlockInfo : MonoBehaviour
             debugTextGos = textMeshGo;
             textMeshGo.transform.localPosition = Vector3.zero;
         }
+
+        var intPos = transform.position.ToVector2Int();
+        name = $"{name} {intPos.x}:{intPos.y}";
 
         StringBuilder debugText = new StringBuilder();// $"{item.blockType}:{intPos.y}";
                                                       //ContaingText(debugText, item, BlockType.Walkable);
@@ -57,6 +190,42 @@ public class BlockInfo : MonoBehaviour
         if (blockType.HasFlag(walkable))
         {
             sb.AppendLine(walkable.ToString());
+        }
+    }
+    Renderer m_Renderer;
+    private Color moveableColor = Color.blue;
+    private Color m_OriginalColor;
+    private void Awake()
+    {
+        m_Renderer = GetComponentInChildren<Renderer>();
+        m_OriginalColor = m_Renderer.material.color;
+    }
+    void OnMouseOver()
+    {
+        if (actor)
+        {
+            ActorStatusUI.Instance.Show(actor);
+        }
+    }
+
+    public void ToChangeBlueColor()
+    {
+        m_Renderer.material.color = moveableColor;
+    }
+    public void ToChangeOriginalColor()
+    {
+        m_Renderer.material.color = m_OriginalColor;
+    }
+    internal void ToChangeColor(Color color)
+    {
+        m_Renderer.material.color = color;
+    }
+
+    void OnMouseExit()
+    {
+        if (actor)
+        {
+            ActorStatusUI.Instance.Close();
         }
     }
 }

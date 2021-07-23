@@ -1,17 +1,32 @@
-using DG.Tweening;
+ï»¿using DG.Tweening;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Player : MonoBehaviour
+public class Player : Actor
 {
-    static public Player SelectPlayer;
+    public static List<Player> Players = new List<Player>();
+    public override ActorTypeEnum ActorType { get => ActorTypeEnum.Plyer; }
+
+    static public Player SelectedPlayer;
     Animator animator;
+    new private void Awake()
+    {
+        base.Awake();
+        Players.Add(this);
+    }
+    new private void OnDestroy()
+    {
+        base.OnDestroy();
+        Players.Remove(this);
+    }
     void Start()
     {
-        SelectPlayer = this;
+        //SelectedPlayer = this;
         animator = GetComponentInChildren<Animator>();
-        GroundManager.Instance.AddBlockInfo(transform.position, BlockType.Player);
+        GroundManager.Instance.AddBlockInfo(transform.position, BlockType.Player, this);
+        FollowTarget.Instance.SetTarget(transform);
     }
 
     public void PlayAnimation(string nodeName)
@@ -19,18 +34,18 @@ public class Player : MonoBehaviour
         animator.Play(nodeName, 0, 0);
     }
 
-    internal void OnTouch(Vector3 position)
+    internal void MoveToPosition(Vector3 position)
     {
-        Vector2Int findPos = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.z));
+        Vector2Int findPos = position.ToVector2Int();//
         FindPath(findPos);
     }
-
+    //public float moveDistanceMultiply = 1.2
     void FindPath(Vector2Int goalPos)
     {
         StopAllCoroutines();
         StartCoroutine(FindPathCo(goalPos));
     }
-    public BlockType passableValues = BlockType.Walkable | BlockType.Water;
+
     IEnumerator FindPathCo(Vector2Int goalPos)
     {
         Transform player = transform;
@@ -38,16 +53,17 @@ public class Player : MonoBehaviour
             , Mathf.RoundToInt(player.position.z));
         playerPos.x = Mathf.RoundToInt(player.position.x);
         playerPos.y = Mathf.RoundToInt(player.position.z);
-        var map = GroundManager.Instance.map;
-        List<Vector2Int> path = PathFinding2D.find4(playerPos, goalPos, map, passableValues);
+        var map = GroundManager.Instance.blockInfoMap;
+        List<Vector2Int> path = PathFinding2D.find4(playerPos, goalPos, (Dictionary<Vector2Int, BlockInfo>)map, passableValues);
         if (path.Count == 0)
-            Debug.Log("±æÀÌ ¾ø´Ù");
+            Debug.Log("ê¸¸ì´ ì—†ë‹¤");
         else
         {
-            // ¿ù·¡ À§Ä¡¿¡¼± ÇÃ·¹ÀÌ¾î Á¤º¸ »èÁ¦
-            GroundManager.Instance.RemoveBlockInfo(Player.SelectPlayer.transform.position, BlockType.Player);
-            Player.SelectPlayer.PlayAnimation("Walk");
-            FollowTarget.Instance.SetTarget(Player.SelectPlayer.transform);
+            // ì›”ë˜ ìœ„ì¹˜ì—ì„  í”Œë ˆì´ì–´ ì •ë³´ ì‚­ì œ
+            GroundManager.Instance.RemoveBlockInfo(Player.SelectedPlayer.transform.position, BlockType.Player);
+            Player.SelectedPlayer.PlayAnimation("Walk");
+            FollowTarget.Instance.SetTarget(Player.SelectedPlayer.transform);
+            path.RemoveAt(0);
             foreach (var item in path)
             {
                 Vector3 playerNewPos = new Vector3(item.x, 0, item.y);
@@ -56,13 +72,97 @@ public class Player : MonoBehaviour
                 player.DOMove(playerNewPos, moveTimePerUnit).SetEase(moveEase);
                 yield return new WaitForSeconds(moveTimePerUnit);
             }
-            Player.SelectPlayer.PlayAnimation("Idle");
+            Player.SelectedPlayer.PlayAnimation("Idle");
             FollowTarget.Instance.SetTarget(null);
-            // ÀÌµ¿ÇÑ À§Ä¡¿¡´Â ÇÃ·¹ÀÌ¾î Á¤º¸ Ãß°¡
-            GroundManager.Instance.AddBlockInfo(Player.SelectPlayer.transform.position, BlockType.Player);
+            // ì´ë™í•œ ìœ„ì¹˜ì—ëŠ” í”Œë ˆì´ì–´ ì •ë³´ ì¶”ê°€
+            GroundManager.Instance.AddBlockInfo(Player.SelectedPlayer.transform.position, BlockType.Player, this);
+
+            completeMove = true;
+
+            bool existAttackTarget = ShowAttackableArea();
+            if (existAttackTarget)
+                StageManager.GameState = GameStateType.SelectToAttackTarget;
+            else
+                StageManager.GameState = GameStateType.SelectPlayer;
         }
+    }
+
+    internal bool CanAttackTarget(Actor actor)
+    {
+        //ê°™ì€íŒ€ì„ ê³µê²©ëŒ€ìƒìœ¼ë¡œ í•˜ì§€ ì•Šê¸°
+        if (actor.ActorType != ActorTypeEnum.Monster)
+            return false;
+
+        // ê³µê²© ê°€ëŠ¥í•œ ë²”ìœ„ ì•ˆì— ìˆëŠ”ì§€ í™•ì¸.
+        return true;
+    }
+
+    internal void AttackToTarget(Actor actor)
+    {
+        ClearEnemyExistPoint();
+
+        StartCoroutine(AttackToTargetCo(actor));
+    }
+
+    public float attackTime = 1;
+    private IEnumerator AttackToTargetCo(Actor actor)
+    {
+        LookAtOnlyYAxis(actor.transform.position);
+
+        animator.Play("Attack");
+        actor.TakeHit(power);
+        yield return new WaitForSeconds(attackTime);
+
+        completeAct = true;
+        StageManager.GameState = GameStateType.SelectPlayer;
+    }
+
+    internal bool OnMoveable(Vector3 position, int maxDistance)
+    {
+        Vector2Int goalPos = position.ToVector2Int();
+        Vector2Int playerPos = transform.position.ToVector2Int();
+        var map = GroundManager.Instance.blockInfoMap;
+        var path = PathFinding2D.find4(playerPos, goalPos, (Dictionary<Vector2Int, BlockInfo>)map, passableValues);
+        if (path.Count == 0)
+        {
+            //Debug.Log("ê¸¸ ì—…ë”° !");
+            return false;
+        }
+        else if (path.Count > maxDistance + 1)
+        {
+            //Debug.Log("ì´ë™ëª¨íƒœ !");
+            return false;
+        }
+
+        return true;
+    }
+
+    public void ClearEnemyExistPoint()
+    {
+        enemyExistPoint.ForEach(x => x.ToChangeOriginalColor());
+        enemyExistPoint.Clear();
+    }
+
+    internal bool ShowAttackableArea()
+    {
+        bool existEnemy = SetAttackableEnemyPoint().Count > 0;
+
+        enemyExistPoint.ForEach(x => x.ToChangeColor(Color.red));
+
+        return existEnemy;
     }
 
     public Ease moveEase = Ease.InBounce;
     public float moveTimePerUnit = 0.3f;
+
+
+    protected override bool IsExistEnemy(BlockInfo blockInfo)
+    {
+        if (blockInfo.blockType.HasFlag(BlockType.Monster) == false)
+            return false;
+
+        Debug.Assert(blockInfo.actor != null, "ì•¡í„°ëŠ” ê¼­ ìˆì–´ì•¼ í•´!");
+
+        return true;
+    }
 }
