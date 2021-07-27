@@ -7,55 +7,61 @@ using UnityEngine.UI;
 
 public class ContextMenuUI : BaseUI<ContextMenuUI>
 {
-    Dictionary<string, UnityAction> menus = new Dictionary<string, UnityAction>();
-    public GameObject baseMenuGo;
-    public Transform menuParentTr;
-
+    public GameObject baseItem;
     protected override void OnInit()
     {
+        baseItem = transform.Find("BG/Button").gameObject;
+
+        Dictionary<string, UnityAction> menus = new Dictionary<string, UnityAction>();
         menus.Add("턴 종료(F10)", EndTurnPlayer);
-        menus.Add("TestMenu1   ", TestMenu1);
-        menus.Add("TestMenu2   ", TestMenu2);
+        menus.Add("테스트 메뉴", TestMenu);
+        menus.Add("테스트 메뉴2",()=> { print("무명함수"); OnClick(); });
 
-        menuParentTr = baseMenuGo.transform.parent;
-        baseMenuGo.SetActive(true);
-        foreach (var item in menus)
+        foreach( var item in menus)
         {
-            var newMenu = Instantiate(baseMenuGo, menuParentTr);
-            newMenu.GetComponentInChildren<Text>().text = item.Key;
-
-            Button button = newMenu.GetComponent<Button>();
-            button.AddListener(this, item.Value);
+            GameObject go = Instantiate(baseItem, baseItem.transform.parent);
+            go.GetComponentInChildren<Text>().text = item.Key;
+            go.GetComponent<Button>().AddListener(this, item.Value);
         }
-        baseMenuGo.SetActive(false);
+
+        baseItem.SetActive(false);
     }
 
-    public void ShowStageMenu()
+    private void TestMenu()
     {
-        base.Show();
-        menuParentTr.gameObject.SetActive(true);
-    }
-
-    private void TestMenu2()
-    {
-        OnClickMenu();
-        Debug.Log("TestMenu1");
-    }
-
-    private void TestMenu1()
-    {
-        OnClickMenu();
-        Debug.Log("TestMenu1");
+        print("TestMenu");
+        OnClick();
     }
 
     private void EndTurnPlayer()
     {
-        OnClickMenu();
-        StageManager.Instance.ProcessEndOfPlayerTurn();
+        print("EndTurnPlayer");
+
+        // 파란색 선택 영역 초기화
+        // 선택된 플레이어 해제.
+        Player.ClearSelectedPlayer();
+
+        StageManager.Instance.StartMonsterTurn();
+
+        OnClick();
     }
-    
-    void OnClickMenu()
+
+    private void OnClick()
     {
         Close();
+    }
+
+    internal void Show(Vector3 uiPosition)
+    {
+        base.Show();
+
+        //https://youtu.be/zKjVdTQbV9w?t=512  참고
+        // 스크린 포지션을 캔바스 포지션으로 수정 ( 마우스 클릭 지점을 UI 위치로 옮길때 사용)
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            transform.parent.GetComponent<RectTransform>()
+            , uiPosition, null, out Vector2 localPoint);
+
+        RectTransform rt = GetComponent<RectTransform>();
+        rt.anchoredPosition = localPoint;
     }
 }

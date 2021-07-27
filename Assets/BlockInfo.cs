@@ -39,39 +39,28 @@ public class BlockInfo : MonoBehaviour
             case GameStateType.SelectPlayer:
                 SelectPlayer();
                 break;
-            case GameStateType.SelectBlockToMoveOrAttackTarget:
-                SelectBlockToMoveOrAttackTarget();
+            case GameStateType.SelectedPlayerMoveOrAct:
+                SelectedPlayerMoveOrAct();
                 break;
-            case GameStateType.SelectToAttackTarget:
+            case GameStateType.SelectToAttackTarget:  //이동후에 공격할 타겟을 선택. 공격할 타겟이 없다면 SelectPlayer로 변경
                 SelectToAttackTarget();
                 break;
 
+            default:
             case GameStateType.NotInit:
             case GameStateType.IngPlayerMove:
             case GameStateType.MonsterTurn:
                 Debug.Log($"블럭을 클릭할 수 없는 상태 입니다:" +
                     $"{StageManager.GameState}");
+
                 break;
         }
-
-        //// 이미 빨간 블럭 상태일때 다시 선택하면 빨간 블럭을 원상 복귀 시켜라.
-
-
-        //// 지금 블럭에 몬스터 있으면 때리자.
-
-
-        //if( actor && actor == Player.SelectedPlayer)
-        //{
-        //    // 영역 표시.
-        //    //actor.moveDistance
-        //    // 첫번째 이동으로 갈수 있는것을 첫번째 라인에 추가.
-        //    ShowMoveDistance(actor.moveDistance);
-        //}
-        //else
-        //    Player.SelectedPlayer.OnTouch(transform.position);
     }
 
-
+    /// <summary>
+    /// 이동후에 공격할 타겟일 수 있는 블럭을 선택했음.
+    /// 블락에 공격할 타겟이 있고 공격 가능한 타겟이면 공격
+    /// </summary>
     private void SelectToAttackTarget()
     {
         if (Player.SelectedPlayer.enemyExistPoint.Contains(this))
@@ -80,10 +69,15 @@ public class BlockInfo : MonoBehaviour
             {
                 Player.SelectedPlayer.AttackToTarget(actor);
             }
+            else
+            {
+                //대상을 공격할 수 없습니다.
+                NotifyUI.Instance.Show("대상을 공격할 수 없습니다.");
+            }
         }
     }
 
-    private void SelectBlockToMoveOrAttackTarget()
+    private void SelectedPlayerMoveOrAct()
     {
         // 공격 대상이 있다면 공격 하자.(액터가 몬스터라면)
         if (actor)
@@ -92,11 +86,18 @@ public class BlockInfo : MonoBehaviour
             // todo:공격 범위 안에 있는지 확인해줘야함.
             if (Player.SelectedPlayer.CanAttackTarget(actor))
             {
+                ClearMoveableArea();
                 Player.SelectedPlayer.AttackToTarget(actor);
+            }
+            else
+            {
+                //대상을 공격할 수 없습니다.
+                NotifyUI.Instance.Show("대상을 공격할 수 없습니다.");
             }
         }
         else
         {
+            // 플레이어 이동블락 클릭
             if (highLightedMoveableArea.Contains(this))
             {
                 Player.SelectedPlayer.ClearEnemyExistPoint();
@@ -115,25 +116,38 @@ public class BlockInfo : MonoBehaviour
         if(actor.GetType() == typeof(Player))
         {
             //Player.SelectedPlayer = actor as Player;
-            Player.SelectedPlayer = (Player)actor;
+            Player player = (Player)actor;
+            if(player.CompleteTurn)
+            {
+                CenterNotifyUI.Instance.Show(
+                    "모든 행동이 끝난 플레이어 입니다");
+                return;
+            }
 
-            if (Player.SelectedPlayer.CompleteTurn)
-                NotifyUI.Instance.Show("모든 행동이 끝난 캐릭터 입니다");
+            Player.SelectedPlayer = player;
 
             //이동 가능한 영역 표시.
-            if (Player.SelectedPlayer.completeMove == false)
-                ShowMoveDistance(Player.SelectedPlayer.moveDistance);
+            if (player.completeMove == false)
+                ShowMoveableArea(Player.SelectedPlayer.moveDistance);
+            else
+            {
+                ToChangeBlueColor();
+                highLightedMoveableArea.Add(this);
+                CenterNotifyUI.Instance.Show("이미 이동했습니다");
+            }
+
 
             // 현재 위치에서 공격 가능한 영역 표시.
-            if (Player.SelectedPlayer.completeAct == false)
-            {
+            if ( player.completeAct == false)
                 Player.SelectedPlayer.ShowAttackableArea();
-                StageManager.GameState = GameStateType.SelectBlockToMoveOrAttackTarget;
-            }
+            else
+                CenterNotifyUI.Instance.Show("이미 행동했습니다");
+
+            StageManager.GameState = GameStateType.SelectedPlayerMoveOrAct;
         }
     }
 
-    private void ShowMoveDistance(int moveDistance)
+    private void ShowMoveableArea(int moveDistance)
     {
         Quaternion rotate = Quaternion.Euler(0, 45, 0);
         Vector3 halfExtents = (moveDistance / Mathf.Sqrt(2)) * 0.99f * Vector3.one;
@@ -146,7 +160,7 @@ public class BlockInfo : MonoBehaviour
             if (Player.SelectedPlayer.OnMoveable(item.transform.position, moveDistance))
             {
                 var block = item.GetComponent<BlockInfo>();
-                if (block)
+                if (block && block.actor == null)
                 {
                     block.ToChangeBlueColor();
                     highLightedMoveableArea.Add(block);
@@ -154,14 +168,14 @@ public class BlockInfo : MonoBehaviour
             }
         }
     }
-    static readonly List<BlockInfo> highLightedMoveableArea = new List<BlockInfo>();
-    private void ClearMoveableArea()
+    static List<BlockInfo> highLightedMoveableArea = new List<BlockInfo>();
+    public static void ClearMoveableArea()
     {
         highLightedMoveableArea.ForEach(x => x.ToChangeOriginalColor());
         highLightedMoveableArea.Clear();
     }
 
-    readonly string debugTextPrefab = "DebugTextPrefab";
+    string debugTextPrefab = "DebugTextPrefab";
     GameObject debugTextGos;
     internal Actor actor;
 

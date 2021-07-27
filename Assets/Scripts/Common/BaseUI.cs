@@ -241,9 +241,7 @@ where T : SingletonBase
             for (int i = 1; i < paths.Length; i++)
             {
                 var item = paths[i];
-                Transform existTr = currentTr.Find(item);
-                if(existTr == null)
-                    existTr = new GameObject(item).transform;
+                Transform existTr = currentTr.Find(item) ?? new GameObject(item).transform;
                 existTr.SetParent(currentTr);
                 currentTr = existTr;
             }

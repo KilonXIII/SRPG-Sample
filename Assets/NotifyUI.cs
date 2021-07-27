@@ -1,30 +1,31 @@
-﻿using System;
+﻿using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class NotifyUI : SingletonMonoBehavior<NotifyUI>
+public class NotifyUI :SingletonMonoBehavior<NotifyUI>
 {
-    Text contentsText;
+    Text contentText;
+    CanvasGroup canvasGroup;
     protected override void OnInit()
     {
-        contentsText = transform.Find("ContentsText").GetComponent<Text>();
+        canvasGroup = GetComponent<CanvasGroup>();
+        contentText = transform.Find("ContentText").GetComponent<Text>();
     }
 
-    internal void Show(string text, float displayTime = 3)
+    internal void Show(string text, float visibleTime = 3)
     {
         base.Show();
 
-        contentsText.text = text;
+        canvasGroup.DOKill();
 
-        StopAllCoroutines();
-        StartCoroutine(HideUiCo(displayTime));
-    }
+        canvasGroup.alpha = 1;
 
-    private IEnumerator HideUiCo(float displayTime)
-    {
-        yield return new WaitForSeconds(displayTime);
-        Close();
+        contentText.text = text;
+
+        canvasGroup.DOFade(0, 1)
+            .SetDelay(visibleTime)
+            .OnComplete(Close);
     }
 }

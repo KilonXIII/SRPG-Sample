@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 
-#pragma warning disable IDE1006 // 명명 스타일
-#pragma warning disable IDE0039 // 로컬 함수 사용
-#pragma warning disable IDE0018 // 인라인 변수 선언
 public static class PathFinding2D
 {
     /**
@@ -73,9 +70,19 @@ public static class PathFinding2D
 
         foreach (var item in getNeighbors(currentNode.pos))
         {
-            if (map.ContainsKey(item) && passableValues.HasFlag(map[item].blockType))
+
+            if (map.ContainsKey(item))
             {
-                findTemp(openList, currentNode, item, to, getDistance);
+                BlockType groundBlockType = map[item].blockType;
+
+                if (item == to) // 목적지에 도착할 수 있는지 판단하기 위해서 목적지랑 같다면 플레그 정보를 삭제한다. 삭제하지 않으면 HasFlag검사에서 실패한다.
+                {
+                    groundBlockType &= ~BlockType.Player;
+                    groundBlockType &= ~BlockType.Monster;
+                }
+
+                if (passableValues.HasFlag(groundBlockType))
+                    findTemp(openList, currentNode, item, to, getDistance);
             }
         }
         var next = openList.FindAll(obj => obj.open).Min();
