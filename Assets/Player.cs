@@ -4,31 +4,88 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class Player : Actor
 {
     public static List<Player> Players = new List<Player>();
-    public override ActorTypeEnum ActorType { get => ActorTypeEnum.Plyer; }
-
-    static public Player SelectedPlayer;
+    public int ID;
+    public int exp
+    {
+        get { return data.exp; }
+        set { data.exp = value; }
+    }
+    public int level
+    {
+        get { return data.level; }
+        set { data.level = value; }
+    }
 
     new protected void Awake()
     {
         base.Awake();
         Players.Add(this);
+
+        InitLevelData();
+    }
+
+    private void InitLevelData()
+    {
+        //exp = new SaveInt("exp" + ID);
+        //level = new SaveInt("level" + ID, 1);
+
+        data = JsonUtility.FromJson<PlayerData>(PlayerPrefs.GetString("PlayerData" + ID));
+        SetLevelData();
+    }
+
+    [ContextMenu("SaveData")]
+    void SaveData()
+    {
+        string json = JsonUtility.ToJson(data);
+
+        try
+        {
+            PlayerPrefs.SetString("PlayerData" + ID, json);
+            Debug.Log("json:" + json);
+        }
+        catch (System.Exception err)
+        {
+            Debug.Log("Exception Got: " + err);
+        }
+    }
+
+    private void SetLevelData()
+    {
+        if (GlobalData.Instance.playerDataMap.ContainsKey(level)== false)
+            Debug.LogError($"{level}레벨 정보가 없습니다");
+
+        var data = GlobalData.Instance.playerDataMap[level];
+        maxExp = data.maxExp;
+        hp = maxHp = data.maxHp;
+        mp = maxMp = data.maxMp;
+    }
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+            AddExp(5);
     }
     new protected void OnDestroy()
     {
         base.OnDestroy();
         Players.Remove(this);
+        SaveData();
     }
+
+    public override ActorTypeEnum ActorType { get => ActorTypeEnum.Player; }
+
+    static public Player SelectedPlayer;
 
     void Start()
     {
         //SelectedPlayer = this;
-        animator = GetComponentInChildren<Animator>();
+        //animator = GetComponentInChildren<Animator>();
         GroundManager.Instance.AddBlockInfo(transform.position, BlockType.Player, this);
-        FollowTarget.Instance.SetTarget(transform);
+
     }
 
     internal void MoveToPosition(Vector3 position)
@@ -42,106 +99,77 @@ public class Player : Actor
         StopAllCoroutines();
         StartCoroutine(FindPathCo(goalPos));
     }
-
-    IEnumerator FindPathCo(Vector2Int goalPos)
-    {
-        Transform tr = transform;
-        Vector2Int playerPos = tr.position.ToVector2Int();
-
-        var map = GroundManager.Instance.blockInfoMap;
-        List<Vector2Int> path = PathFinding2D.find4(playerPos, goalPos, (Dictionary<Vector2Int, BlockInfo>)map, passableValues);
-        if (path.Count == 0)
-            Debug.Log("길이 없다");
-        else
-        {
-            // 월래 위치에선 플레이어 정보 삭제
-            GroundManager.Instance.RemoveBlockInfo(Player.SelectedPlayer.transform.position, BlockType.Player);
-            PlayAnimation("Walk");
-            FollowTarget.Instance.SetTarget(Player.SelectedPlayer.transform);
-            path.RemoveAt(0);
-            foreach (var item in path)
-            {
-                Vector3 playerNewPos = new Vector3(item.x, 0, item.y);
-                tr.LookAt(playerNewPos);
-                tr.DOMove(playerNewPos, moveTimePerUnit).SetEase(moveEase);
-                yield return new WaitForSeconds(moveTimePerUnit);
-            }
-            Player.SelectedPlayer.PlayAnimation("Idle");
-            FollowTarget.Instance.SetTarget(null);
-            // 이동한 위치에는 플레이어 정보 추가
-            GroundManager.Instance.AddBlockInfo(Player.SelectedPlayer.transform.position, BlockType.Player, this);
-
-            bool existAttackTarget = ShowAttackableArea();
-            if (existAttackTarget)
-                StageManager.GameState = GameStateType.SelectToAttackTarget;
-            else
-                StageManager.GameState = GameStateType.SelectPlayer;
-
-            completeMove = true;
-        }
-    }
-
-    internal static void ClearSelectedPlayer()
-    {
-        SelectedPlayer = null;
-        BlockInfo.ClearMoveableArea();
-    }
-
-    internal bool CanAttackTarget(Actor actor)
+    internal bool CanAttackTarget(Actor enemy)
     {
         //같은팀을 공격대상으로 하지 않기
-        if (actor.ActorType != ActorTypeEnum.Monster)
+        if (enemy.ActorType != ActorTypeEnum.Monster)
             return false;
 
         // 공격 가능한 범위 안에 있는지 확인.
-        if (completeAct)
+        if (IsInAttackableArea(enemy.transform.position) == false)
             return false;
 
-        if (IsAttackablePosition(actor.transform.position) == false)
+        if (completeAct)
             return false;
 
         return true;
     }
 
-    internal void AttackToTarget(Actor actor)
+    internal void AttackToTarget(Monster actor)
     {
         ClearEnemyExistPoint();
-
-        StartCoroutine(AttackToTargetCo(actor));
+        StartCoroutine(AttackToTargetCo_(actor));
     }
 
-    public float attackTime = 1;
-    private IEnumerator AttackToTargetCo(Actor attackTarget)
+    private IEnumerator AttackToTargetCo_(Monster monster)
     {
-        transform.LookAt(attackTarget.transform);
-
-        animator.Play("Attack");
-        //attackTarget위치에 나의 AttackPoint를 확인해서 AttackArea가 있다면 추가 범위공격을 하자.
-        var attackAreas = GetAttackableAreas(attackTarget.transform.position);
-        foreach (var item in attackAreas)
+        yield return AttackToTargetCo(monster);
+        if (monster.status == StatusType.Die)
         {
-            var itemPoint = item.transform.position.ToVector2Int();
-            GroundManager.Instance.blockInfoMap.TryGetValue(itemPoint, out BlockInfo block);
-            var newAttackTarget = block.actor;
-            if(newAttackTarget)
-                StartCoroutine(newAttackTarget.TakeHitCo((int)(power * item.damageRatio)));
+            AddExp(monster.rewardExp);
+
+            if (monster.dropItemGroup.ratio > Random.Range(0, 1f))
+                DropItem(monster.dropItemGroup.dropItemID, monster.transform.position);
         }
-
-        yield return attackTarget.TakeHitCo(power);
-        yield return new WaitForSeconds(attackTime);
-
-        completeAct = true;
-        
-        if(StageManager.IsGameOver == false)
-            StageManager.GameState = GameStateType.SelectPlayer;
+        StageManager.GameState = GameStateType.SelectPlayer;
     }
 
-    private List<AttackArea> GetAttackableAreas(Vector3 position)
+    [ContextMenu("DropTestTemp")]
+    void DropTestTemp()
     {
-        var intPos = position.ToVector2Int();
-        var myPos = transform.position.ToVector2Int();
-        Vector2Int localPos = intPos - myPos;
-        return attackablePoints[localPos].GetAttackableAreas();
+        DropItem(1);
+    }
+    private void DropItem(int dropGroupID, Vector3? position = null)
+    {
+        var dropGroup = GlobalData.Instance.dropItemGroupDataMap[dropGroupID];
+        
+        var dropItemRaioInfo = dropGroup.dropItmes
+            .OrderByDescending(x => x.ratio * Random.Range(0, 1f)).First();
+        print(dropItemRaioInfo.ToString());
+
+        var dropItem = GlobalData.Instance.itemDataMap[dropItemRaioInfo.dropItemID];
+        print(dropItem.ToString());
+        GroundManager.Instance.AddBlockInfo(position.Value, BlockType.Item, dropItem);
+    }
+
+    public int maxExp;
+    private void AddExp(int rewardExp)
+    {
+        // 경험치 추가.
+        exp += rewardExp;
+
+        // 경험치가 최대 경험치 보다 클경우 레벨 증가.
+        if(exp >= maxExp)
+        {
+            exp = exp - maxExp;
+
+            //레벨업, 
+            level++;
+            SetLevelData();
+
+            CenterNotifyUI.Instance
+                .Show($"Lv.{level}으로 증가했습니다");
+        }
     }
 
     internal bool OnMoveable(Vector3 position, int maxDistance)
@@ -169,6 +197,58 @@ public class Player : Actor
         enemyExistPoint.ForEach( x => x.ToChangeOriginalColor());
         enemyExistPoint.Clear();
     }
+
+    [System.Serializable]
+    public class InventoryItemInfo
+    {
+        public int itemID;
+        public int count;
+    }
+
+    [System.Serializable]
+    public class PlayerData
+    {
+        public int exp, level;
+        public List<InventoryItemInfo> haveItems = new List<InventoryItemInfo>();
+    }
+
+    public PlayerData data = new PlayerData();
+    protected override void OnCompleteMove()
+    {
+        //아이템 있다면 먹자. 지금 위치에 아이템 있다면 획득하자.
+        BlockInfo blockInfo = GroundManager.Instance.GetBlockInfo(transform.position);
+        if(blockInfo.dropItemID != 0)
+        {
+            int addItemID = blockInfo.dropItemID;
+            int addCount = 1;
+
+            //인벤토리에서 증가.
+            var existItem = data.haveItems.Find(x => x.itemID == addItemID);
+            if (existItem != null)
+            {
+                existItem.count += addCount;
+            }
+            else
+            {
+                InventoryItemInfo addItem = new InventoryItemInfo() { itemID = addItemID };
+                data.haveItems.Add(addItem);
+            }
+
+            // 획득소식 UI에 표시.
+            string iconName = GlobalData.Instance.itemDataMap[addItemID].iconName;
+            NotifyUI.Instance.Show($"{iconName}을 획득했습니다");
+
+            // 블럭에서 아이템 정보 삭제
+            GroundManager.Instance.RemoveItemInfo(transform.position);
+        }
+
+        bool existAttackTarget = ShowAttackableArea();
+        if (existAttackTarget)
+            StageManager.GameState = GameStateType.SelectToAttackTarget;
+        else
+            StageManager.GameState = GameStateType.SelectPlayer;
+    }
+
     public List<BlockInfo> enemyExistPoint = new List<BlockInfo>();
     internal bool ShowAttackableArea()
     {
@@ -177,7 +257,7 @@ public class Player : Actor
         var map = GroundManager.Instance.blockInfoMap;
 
         //공격가능한 지역에 적이 있는지 확인하자.
-        foreach (var item in attackablePoints.Keys)
+        foreach (var item in attackableLocalPositions)
         {
             Vector2Int pos = item + currentPos; //item의 월드 지역 위치;
 
@@ -208,16 +288,17 @@ public class Player : Actor
         return true;
     }
 
-    public Ease moveEase = Ease.InBounce;
-
+    public override BlockType GetBlockType()
+    {
+        return BlockType.Player;
+    }
     protected override void OnDie()
     {
+        // 모든 플레이어가 죽었는지 파악해서 다 죽었다면 GameOver표시.
         if (Players.Where(x => x.status != StatusType.Die).Count() == 0)
         {
-            //플레이어가 모두 죽었다
-            CenterNotifyUI.Instance.Show("유다이");
-            StageManager.GameState = GameStateType.GameOver;
+            CenterNotifyUI.Instance.Show(@"유다이
+Game Over");
         }
     }
-
 }

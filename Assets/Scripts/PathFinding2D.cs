@@ -70,19 +70,14 @@ public static class PathFinding2D
 
         foreach (var item in getNeighbors(currentNode.pos))
         {
+            //BlockType itemBlockType = map[item].blockType;
+            //if (to == item)
+            //    itemBlockType &= ~BlockType.Player;
 
-            if (map.ContainsKey(item))
+            if (map.ContainsKey(item) && 
+                (passableValues.HasFlag(map[item].blockType) || to == item))
             {
-                BlockType groundBlockType = map[item].blockType;
-
-                if (item == to) // 목적지에 도착할 수 있는지 판단하기 위해서 목적지랑 같다면 플레그 정보를 삭제한다. 삭제하지 않으면 HasFlag검사에서 실패한다.
-                {
-                    groundBlockType &= ~BlockType.Player;
-                    groundBlockType &= ~BlockType.Monster;
-                }
-
-                if (passableValues.HasFlag(groundBlockType))
-                    findTemp(openList, currentNode, item, to, getDistance);
+                findTemp(openList, currentNode, item, to, getDistance);
             }
         }
         var next = openList.FindAll(obj => obj.open).Min();

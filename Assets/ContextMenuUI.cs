@@ -37,11 +37,7 @@ public class ContextMenuUI : BaseUI<ContextMenuUI>
     {
         print("EndTurnPlayer");
 
-        // 파란색 선택 영역 초기화
-        // 선택된 플레이어 해제.
-        Player.ClearSelectedPlayer();
-
-        StageManager.Instance.StartMonsterTurn();
+        StageManager.Instance.EndTurnPlayer();
 
         OnClick();
     }

@@ -12,6 +12,7 @@ public enum BlockType
     Water       = 1 << 1,
     Player      = 1 << 2,
     Monster     = 1 << 3,
+    Item        = 1 << 4,
 }
 public class BlockInfo : MonoBehaviour
 {
@@ -45,17 +46,39 @@ public class BlockInfo : MonoBehaviour
             case GameStateType.SelectToAttackTarget:  //이동후에 공격할 타겟을 선택. 공격할 타겟이 없다면 SelectPlayer로 변경
                 SelectToAttackTarget();
                 break;
+            //case GameStateType.AttackToTarget:
+            //    AttackToTarget();
+            //    break;
 
-            default:
             case GameStateType.NotInit:
             case GameStateType.IngPlayerMove:
             case GameStateType.MonsterTurn:
                 Debug.Log($"블럭을 클릭할 수 없는 상태 입니다:" +
                     $"{StageManager.GameState}");
-
                 break;
         }
+
+        //// 이미 빨간 블럭 상태일때 다시 선택하면 빨간 블럭을 원상 복귀 시켜라.
+
+
+        //// 지금 블럭에 몬스터 있으면 때리자.
+
+
+        //if( actor && actor == Player.SelectedPlayer)
+        //{
+        //    // 영역 표시.
+        //    //actor.moveDistance
+        //    // 첫번째 이동으로 갈수 있는것을 첫번째 라인에 추가.
+        //    ShowMoveDistance(actor.moveDistance);
+        //}
+        //else
+        //    Player.SelectedPlayer.OnTouch(transform.position);
     }
+
+    //private void AttackToTarget()
+    //{
+    //    throw new NotImplementedException();
+    //}
 
     /// <summary>
     /// 이동후에 공격할 타겟일 수 있는 블럭을 선택했음.
@@ -67,12 +90,7 @@ public class BlockInfo : MonoBehaviour
         {
             if (Player.SelectedPlayer.CanAttackTarget(actor))
             {
-                Player.SelectedPlayer.AttackToTarget(actor);
-            }
-            else
-            {
-                //대상을 공격할 수 없습니다.
-                NotifyUI.Instance.Show("대상을 공격할 수 없습니다.");
+                Player.SelectedPlayer.AttackToTarget((Monster)actor);
             }
         }
     }
@@ -87,12 +105,11 @@ public class BlockInfo : MonoBehaviour
             if (Player.SelectedPlayer.CanAttackTarget(actor))
             {
                 ClearMoveableArea();
-                Player.SelectedPlayer.AttackToTarget(actor);
+                Player.SelectedPlayer.AttackToTarget((Monster)actor);
             }
             else
             {
-                //대상을 공격할 수 없습니다.
-                NotifyUI.Instance.Show("대상을 공격할 수 없습니다.");
+                NotifyUI.Instance.Show("여기는 공격할 수 없어요");
             }
         }
         else
@@ -130,11 +147,7 @@ public class BlockInfo : MonoBehaviour
             if (player.completeMove == false)
                 ShowMoveableArea(Player.SelectedPlayer.moveDistance);
             else
-            {
-                ToChangeBlueColor();
-                highLightedMoveableArea.Add(this);
                 CenterNotifyUI.Instance.Show("이미 이동했습니다");
-            }
 
 
             // 현재 위치에서 공격 가능한 영역 표시.
@@ -145,6 +158,12 @@ public class BlockInfo : MonoBehaviour
 
             StageManager.GameState = GameStateType.SelectedPlayerMoveOrAct;
         }
+    }
+
+    internal void DeleteItemInfo()
+    {
+        dropItemID = 0;
+        Destroy(dropItemGo);
     }
 
     private void ShowMoveableArea(int moveDistance)
@@ -160,7 +179,7 @@ public class BlockInfo : MonoBehaviour
             if (Player.SelectedPlayer.OnMoveable(item.transform.position, moveDistance))
             {
                 var block = item.GetComponent<BlockInfo>();
-                if (block && block.actor == null)
+                if (block)
                 {
                     block.ToChangeBlueColor();
                     highLightedMoveableArea.Add(block);
@@ -177,7 +196,7 @@ public class BlockInfo : MonoBehaviour
 
     string debugTextPrefab = "DebugTextPrefab";
     GameObject debugTextGos;
-    internal Actor actor;
+    public Actor actor;
 
     internal void UpdateDebugInfo()
     {
@@ -209,6 +228,9 @@ public class BlockInfo : MonoBehaviour
     Renderer m_Renderer;
     private Color moveableColor = Color.blue;
     private Color m_OriginalColor;
+    public int dropItemID;
+    internal GameObject dropItemGo;
+
     private void Awake()
     {
         m_Renderer = GetComponentInChildren<Renderer>();

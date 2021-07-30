@@ -112,7 +112,7 @@ where T : SingletonBase
 public class SingletonMonoBehavior<T> : SingletonBase
 where T : SingletonBase
 {
-    protected static bool ApplicationQuit = false;
+    public static bool ApplicationQuit = false;
     private void OnApplicationQuit() => ApplicationQuit = true;
 
     static protected T m_instance;
@@ -178,12 +178,12 @@ where T : SingletonBase
             m_instance.ExecuteOneTimeInit();
 
 
-        RectTransform rectTransform = m_instance.gameObject.GetComponent<RectTransform>();
-        if (rectTransform)
-        {
-            rectTransform.localPosition = Vector3.zero;
-            rectTransform.localScale = Vector3.one;
-        }
+        //RectTransform rectTransform = m_instance.gameObject.GetComponent<RectTransform>();
+        //if (rectTransform)
+        //{
+        //    rectTransform.localPosition = Vector3.zero;
+        //    rectTransform.localScale = Vector3.one;
+        //}
 
         /// 최초 '/' 앞에 있는 경로
         string GetRootParentPath(string _originalPath)
@@ -319,7 +319,7 @@ where T : SingletonBase
         m_instance = null;
     }
 
-    private void DestroyChildObject()
+    protected void DestroyChildObject()
     {
         if (childObject == null)
             return;

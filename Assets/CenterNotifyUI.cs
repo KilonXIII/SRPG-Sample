@@ -18,7 +18,6 @@ public class CenterNotifyUI : SingletonMonoBehavior<CenterNotifyUI>
     internal void Show(string text, float visibleTime = 3)
     {
         base.Show();
-        print(text);
         canvasGroup.alpha = 1;
 
         contentText.text = text;

@@ -92,8 +92,7 @@ public class UIStackManager : SingletonMonoBehavior<UIStackManager>
         {
             Destroy(gameObject);
                 
-            // 스테이지 다시 로드할때 발생할 수 있음, 그래서 에러 로그 제거
-            //Debug.LogError($"{typeof(UIStackManager)} : 이미 초기화되었습니다, 불필요한 생성입니다 {transform.GetPath()} ", this);
+            Debug.LogError($"{typeof(UIStackManager)} : 이미 초기화되었습니다, 불필요한 생성입니다 {transform.GetPath()} ", this);
             return;
         }
         base.Awake();
